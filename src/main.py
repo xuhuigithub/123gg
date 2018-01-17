@@ -19,13 +19,23 @@ HEADERS = {
 import requests
 import time
 import logging
+import os
 from stations import stations_dict
-from sms import sms_send
+import itchat
 
+_temp = __import__('config', globals(), locals(), ['ProductionConfig', 'DevelopmentConfig'], 0)
+
+if os.environ.get('Production'):
+    config = _temp.ProductionConfig()
+else:
+    config = _temp.DevelopmentConfig()
 # logger
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s [%(threadName)s]")
+
 logger = logging.getLogger(__name__)
+if config.DEBUG:
+    logger.setLevel(level=logging.DEBUG)
 
 # 关闭https证书验证警告
 requests.packages.urllib3.disable_warnings()
@@ -74,7 +84,7 @@ def query_train_info(url):
     result = dict()
     result['info_list'] = []
     try:
-        r = requests.get(url,headers=HEADERS,verify=False)
+        r = requests.get(url, headers=HEADERS, verify=False)
         # 获取返回的json数据里的data字段的result结果
         raw_trains = r.json()['data']['result']
 
@@ -109,25 +119,31 @@ def query_train_info(url):
             # 无座
             no_seat = data_list[26] or '无'
 
-            if no_seat != "无" or hard_seat != "无" and "VNP" not in data_list:   #过滤掉动车，高铁
-                info = ('车次:{train_no},出发时间:{start_time},到达时间:{arrive_time}'.format(train_no=train_no,
-                                                                                    start_time=start_time,
-                                                                                    arrive_time=arrive_time
-                                                                                    ))
+            if no_seat != "无" or hard_seat != "无" and "VNP" not in data_list:  # 过滤掉动车，高铁
+                info = ('车次:{train_no},无座:{no_seat},硬座:{hard_seat}'.format(train_no=train_no,
+                                                                           no_seat=no_seat,
+                                                                           hard_seat=hard_seat
+                                                                           ))
                 result['info_list'].append(info)
     except Exception as e:
-        print(r.text)
         logger.warning(str(e))
     finally:
         return result
 
 
+def send_wechat(nickName, message):
+    person = itchat.search_friends(nickName=nickName)[0]
+    logger.debug(person.send(message))
+
 if __name__ == '__main__':
+    itchat.auto_login(hotReload=True)
     while True:
-        info_list = query_train_info(get_query_url(u"2018-02-14 北京 德州")).get('info_list')
+        # info_list = query_train_info(get_query_url(u"2018-02-14 北京 德州")).get('info_list')
+        info_list = query_train_info(get_query_url(u"%s 北京 德州" % config.SET_OFF_DATE)).get('info_list')
         if info_list:
-            logger.info(sms_send(receiver=17710399068, msg=str(info_list), timeout=5))
-            # logger.info(sms_send(receiver=17710399068, msg=str(info_list), timeout=5))
+            logger.info('Send messages...')
+            send_wechat(nickName=u"丸子没樱桃",message=str(info_list))
+            send_wechat(nickName=u"迎客松",message=str(info_list))
             time.sleep(60)
         else:
             time.sleep(5)
