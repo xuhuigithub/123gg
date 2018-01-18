@@ -22,6 +22,7 @@ import logging
 import os
 from stations import stations_dict
 import itchat
+from http.client import RemoteDisconnected
 
 _temp = __import__('config', globals(), locals(), ['ProductionConfig', 'DevelopmentConfig'], 0)
 
@@ -120,7 +121,8 @@ def query_train_info(url):
             no_seat = data_list[26] or '无'
 
             if no_seat != "无" or hard_seat != "无" and "VNP" not in data_list:  # 过滤掉动车，高铁
-                info = ('车次:{train_no},无座:{no_seat},硬座:{hard_seat}'.format(train_no=train_no,
+                info = ('发车时间:{start_time}车次:{train_no},无座:{no_seat},硬座:{hard_seat}'.format(train_no=train_no,
+                                                                           start_time=start_time,
                                                                            no_seat=no_seat,
                                                                            hard_seat=hard_seat
                                                                            ))
@@ -140,10 +142,13 @@ if __name__ == '__main__':
     while True:
         # info_list = query_train_info(get_query_url(u"2018-02-14 北京 德州")).get('info_list')
         info_list = query_train_info(get_query_url(u"%s 北京 德州" % config.SET_OFF_DATE)).get('info_list')
+        sleep_sec = 5
         if info_list:
-            logger.info('Send messages...')
-            send_wechat(nickName=u"丸子没樱桃",message=str(info_list))
-            send_wechat(nickName=u"迎客松",message=str(info_list))
-            time.sleep(60)
-        else:
-            time.sleep(5)
+            logger.info('Send message...')
+            try:
+                send_wechat(nickName=u"丸子没樱桃",message=str(info_list))
+                send_wechat(nickName=u"迎客松",message=str(info_list))
+            except RemoteDisconnected:
+                logger.info(u'可把我自己牛逼坏了叉会腰')     #微信把连接断开（发消息太频繁了？）
+                sleep_sec = 300
+        time.sleep(sleep_sec)
