@@ -92,7 +92,8 @@ def query_train_info(url):
         for raw_train in raw_trains:
             # 循环遍历每辆列车的信息
             data_list = raw_train.split('|')
-
+            # 长的车次号码例如：24000G42870Z
+            ver_train_no = data_list[2]
             # 车次号码
             train_no = data_list[3]
             # 出发站
